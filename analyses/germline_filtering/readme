@@ -1,18 +1,14 @@
 GOAL: With the data provided from each institute, remove as many germline and FP sites as possible
 
-::TODO::
-- Read counts and other metrics across likely somatic sites, but that we tagged as common_variant.
-- Plot read counts of FPs across centers, and whether they were from contamination or miscalling.
-
 ## ------------------ ##
 ## Filtering Criteria ##
 ## ------------------ ##
 
 # MSK has the most samples analyzed with a matched normal control. So we can use it as a truth set
-# that has minimal germline variants incorrectly called somatic. Let's use maf2maf v1.6.11 to
+# that has minimal germline variants incorrectly called somatic. Let's use maf2maf v1.6.12 to
 # annotate it with ExAC subpopulation allele counts and ClinVar annotations, among other things:
 # ::NOTE:: The raw data file "data_mutations_extended_MSK.txt" cannot be made publicly available.
-/opt/common/CentOS_6-dev/perl/perl-5.22.0/bin/perl /opt/common/CentOS_6-dev/vcf2maf/v1.6.11/maf2maf.pl --input-maf ../../data/mutations/data_mutations_extended_MSK.txt --output-maf bin/data_mutations_extended_msk.vep.maf --tmp-dir msk_anno --custom-enst /opt/common/CentOS_6-dev/vcf2maf/v1.6.11/data/isoform_overrides_uniprot --vep-path /opt/common/CentOS_6-dev/vep/v86 --vep-data /opt/common/CentOS_6-dev/vep/v86 --vep-forks 16 --filter-vcf /opt/common/CentOS_6-dev/vep/v86/ExAC_nonTCGA.r0.3.1.sites.vep.vcf.gz --max-filter-ac 16 --ref-fasta /opt/common/CentOS_6-dev/vep/v86/homo_sapiens/86_GRCh37/Homo_sapiens.GRCh37.75.dna.primary_assembly.fa.gz
+/opt/common/CentOS_6-dev/perl/perl-5.22.0/bin/perl /opt/common/CentOS_6-dev/vcf2maf/v1.6.12/maf2maf.pl --input-maf ../../data/mutations/data_mutations_extended_MSK.txt --output-maf bin/data_mutations_extended_msk.vep.maf --tmp-dir msk_anno --custom-enst /opt/common/CentOS_6-dev/vcf2maf/v1.6.12/data/isoform_overrides_uniprot --vep-path /opt/common/CentOS_6-dev/vep/v86 --vep-data /opt/common/CentOS_6-dev/vep/v86 --vep-forks 16 --filter-vcf /opt/common/CentOS_6-dev/vep/v86/ExAC_nonTCGA.r0.3.1.sites.vep.vcf.gz --max-filter-ac 8 --ref-fasta /opt/common/CentOS_6-dev/vep/v86/homo_sapiens/86_GRCh37/Homo_sapiens.GRCh37.75.dna.primary_assembly.fa.gz
 
 # From MSK, we have a file (bin/msk_matched_normal_status.tsv) indicating which samples were
 # "Matched" to normal controls. Use this to create a subset MAF of samples with matched controls:
@@ -22,32 +18,31 @@ perl -e '%m=map{split("\t")}`grep Matched bin/msk_matched_normal_status.tsv | cu
 
 # Let's try different subpopulation allele count cutoffs till we get something that...
 # 1. Removes no more than 1% (477/47725) of MSK's mutations from samples with matched controls:
-perl -a -F'\t' -ne '$c=0; map{($ac)=m/^(\d+)/; ++$c if($ac>16)}@F[115..121]; print if($c>0)' bin/data_mutations_extended_msk.matched.vep.maf | wc -l
-# 2. Manual review of most recurrent exclusions sites are unfamiliar, predicted benign, or common:
-perl -a -F'\t' -ne '$c=0; map{($ac)=m/^(\d+)/; ++$c if($ac>16)}@F[115..121]; print if($c>0)' bin/data_mutations_extended_msk.matched.vep.maf | cut -f1,37,72,73,113,123 | sort | uniq -c | sort -rn | head -n15
-# #Muts  Gene     HGVSp_Short       SIFT                              PolyPhen                  ExAC_AF_Adj  ExAC_FILTER
-# 7      ASXL1    p.G646Wfs*12                                                                  0.0006317    PASS
-# 6      AR       p.G473dup                                                                     0.007539     PASS
-# 5      HNF1A    p.P291Qfs*51                                                                  0.001155     VQSRTrancheINDEL96.00to97.00
-# 4      HLA-A    p.R30K            tolerated_low_confidence(0.05)    possibly_damaging(0.761)  0.0003905    PASS
-# 4      DAXX     p.R526H           deleterious_low_confidence(0.04)  benign(0.007)             0.0003016    PASS
-# 3      RPS6KA4  p.A287V           tolerated(0.34)                   benign(0.082)             0.00118      PASS
-# 3      NOTCH2   p.A3F             tolerated_low_confidence(0.73)    unknown(0)                0.01489      PASS
-# 3      NCOA3    p.Q1275_Q1276del                                                              0.007619     VQSRTrancheINDEL97.00to99.00
-# 3      CDKN1A   p.R84Q            tolerated(0.59)                   benign(0.033)             0.002838     PASS
-# 3      ASXL1    p.G645Vfs*58                                                                  0.001516     PASS
-# 3      AR       p.L57del                                                                      0.002434     PASS
-# 2      ROS1     p.E1902K          deleterious(0.03)                 possibly_damaging(0.509)  0.008532     PASS
-# 2      RET      p.A373V           tolerated(0.35)                   benign(0.002)             0.0008199    PASS
-# 2      RECQL4   p.V624I           tolerated(0.43)                   benign(0.064)             0.0002519    PASS
-# 2      PTPRT    p.V396I           deleterious(0.01)                 benign(0.382)             0.001188     PASS
+perl -a -F'\t' -ne '$c=0; map{($ac)=m/^(\d+)/; ++$c if($ac>10)}@F[115..121]; print if($c>0)' bin/data_mutations_extended_msk.matched.vep.maf | wc -l
+# 2. Manual review of most recurrent exclusions are unfamiliar, predicted benign, or common:
+perl -a -F'\t' -ne '$c=0; map{($ac)=m/^(\d+)/; ++$c if($ac>10)}@F[115..121]; print if($c>0)' bin/data_mutations_extended_msk.matched.vep.maf | cut -f1,37,86,87,114,123 | sort | uniq -c | sort -rn | head -n15
+# #Muts  Gene     HGVSp_Short     ClinVar        SOMATIC  ExAC_AC_AN_Adj  ExAC_FILTER
+# 6      AR       G473dup                                 54/7163         PASS
+# 5      HNF1A    P291Qfs*51                     0,0,0,1  99/85690        VQSRTrancheINDEL96.00to97.00
+# 4      HLA-A    R30K                           0,1      37/94758        PASS
+# 4      DAXX     R526H                          0,1      32/106086       PASS
+# 3      RPS6KA4  A287V                                   124/105094      PASS
+# 3      NOTCH2   A3F                                     1218/81802      PASS
+# 3      NCOA3    Q1275_Q1276del                          768/100806      VQSRTrancheINDEL97.00to99.00
+# 3      CDKN1A   R84Q                                    289/101816      PASS
+# 3      AR       L57del                                  167/68624       PASS
+# 2      TCF7L2   C486Vfs*8                      0,1,1,1  25/102936       VQSRTrancheINDEL97.00to99.00
+# 2      ROS1     E1902K                                  905/106074      PASS
+# 2      RET      A373V           likely_benign  0,0,1,1  87/106108       PASS
+# 2      RECQL4   V624I                                   26/103220       PASS
+# 2      PTPRT    V396I                          0,1      125/105206      PASS
+# 2      PTPRT    R112H                                   57/105532       PASS
 
-# Chose criteria: "At least one ExAC subpopulation has AC>16, and ClinVar doesn't say pathogenic".
-# An AC>15 would have removed SF3B1:K700E. This criteria has already been implemented as the tag
-# "common_variant" added by vcf2maf/maf2maf v1.6.11 under a column named FILTER.
+# Chose criteria: "At least one ExAC subpopulation has AC>10". This criteria is implemented as the
+# tag "common_variant" added by vcf2maf/maf2maf v1.6.12 under a column named FILTER.
 
-# ::NOTE:: Tagged 356 calls across 238 MSK samples with matched controls. Median=1 call per sample.
-# The most such calls per sample were: 20, 12, 8, 8, 7, 5, 5, 5, 4, 4, 4, 4, 4, 3, 3, ...
+# ::NOTE:: Tagged 471 calls across 319 MSK samples with matched controls. Median=1 call per sample.
+# The most such calls per sample were: 22, 12, 12, 11, 8, 7, 7, 6, 6, 5...
 
 ## ------------------- ##
 ## Check for known FPs ##
